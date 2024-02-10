@@ -17,40 +17,12 @@ use actix_web::{
 
 use askama_actix::Template;
 
-use mime::TEXT_PLAIN_UTF_8;
+use mime::TEXT_CSV_UTF_8;
 
 use serde_derive::{
     Deserialize,
     Serialize,
 };
-
-use std::{
-    cmp::Reverse,
-    collections::{
-        BinaryHeap,
-        BTreeMap,
-        HashMap,
-        HashSet,
-    },
-    fs::File,
-    io::{
-        BufRead,
-        Cursor,
-        Read,
-        Seek,
-        SeekFrom,
-        Write,
-    },
-    path::Path,
-    sync::Mutex,
-    time::Instant,
-};
-
-enum Tag {
-    Title,
-    UserName,
-    Other,
-}
 
 pub fn version() -> &'static str {
     if env!("CARGO_PKG_VERSION").ends_with("-dev") {
@@ -71,24 +43,66 @@ struct IndexTemplate<'a> {
 }
 
 #[get("/")]
-async fn serve_index(data: Data<AppState>) -> impl Responder {
+async fn serve_index(_data: Data<AppState>) -> impl Responder {
     IndexTemplate {
         version: version(),
     }
+}
+
+
+#[derive(Deserialize)]
+struct ClanRequest {
+    clan: String,
+}
+
+#[derive(Serialize)]
+struct ClanMember<'a> {
+    name: &'a str,
+    current_elo: u32,
+    highest_elo: u32,
 }
 
 #[get("/clan")]
-async fn serve_clan(data: Data<AppState>) -> impl Responder {
-    IndexTemplate {
-        version: version(),
+async fn serve_clan(clan_request: Query<ClanRequest>, _data: Data<AppState>) -> impl Responder {
+    let mut buffer = Vec::new();
+
+    {
+        let mut csv_writer = csv::Writer::from_writer(&mut buffer);
+
+        let rec = ClanMember {
+            name: &clan_request.clan,
+            current_elo: 0,
+            highest_elo: 1,
+        };
+
+        csv_writer.serialize(rec).unwrap();
+        csv_writer.flush().unwrap();
     }
+
+    HttpResponse::Ok()
+        .content_type(ContentType(TEXT_CSV_UTF_8))
+        .body(String::from_utf8(buffer).unwrap())
+}
+
+
+#[derive(Deserialize)]
+struct MatchesRequest {
+    members: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Serialize)]
+struct MatchesResponse {
+    placeholder: String,
 }
 
 #[get("/matches")]
-async fn serve_matches(data: Data<AppState>) -> impl Responder {
-    IndexTemplate {
-        version: version(),
-    }
+async fn serve_matches(matches_request: Query<MatchesRequest>, _data: Data<AppState>) -> WebResult<Json<MatchesResponse>> {
+    let members: Vec<String> = matches_request.members.split(',').map(|user| user.to_string()).collect();
+
+    Ok(Json(MatchesResponse {
+        placeholder: members.join("|"),
+    }))
 }
 
 #[allow(non_snake_case)]
@@ -125,7 +139,7 @@ struct QueryRequest {
 }
 
 #[get("/version")]
-async fn serve_version(data: Data<AppState>) -> impl Responder {
+async fn serve_version(_data: Data<AppState>) -> impl Responder {
     HttpResponse::Ok().body(format!("Running arkaoe v{}\n", version()))
 }
 
@@ -134,7 +148,6 @@ pub async fn serve(hostname: String, port: u16) -> std::io::Result<()> {
     let data = Data::new(AppState {
 
     });
-    let initial_data = data.clone();
     println!("Listening on {}:{}...", hostname, port);
     HttpServer::new(move || {
         App::new()

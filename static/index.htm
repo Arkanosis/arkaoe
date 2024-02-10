@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>arkaoe</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="Content-Language" content="en" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="favicon.ico" />
+    <link rev="made" href="mailto:jroquet@arkanosis.net" />
+    <style>
+      * {
+        color: #212529;
+      }
+      html {
+        height: 100%;
+      }
+      body {
+        min-height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      a {
+        color: #24478f;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      header, footer {
+        display: flex;
+        flex-wrap: wrap;
+        width: 100%;
+        background-color: #eaecf0;
+      }
+      footer {
+        bottom:0;
+      }
+      form {
+        padding: 15px;
+      }
+      .warning {
+        padding: 15px;
+        background-color: #fcf8e3;
+        border-color: #faebcc;
+        border-radius: 4px;
+      }
+      .warning, .warning strong {
+        color: #8a6d3b;
+      }
+      .version {
+          margin-bottom: 0;
+          bottom: 0;
+          right: 0;
+          width: 100%;
+          text-align:right;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="./"><!--<img src="logo.svg" alt="arkaoe logo" width="120" height="120" style="padding: 10px;">--></a>
+      <div style="height: 120px; margin-left: 10px; padding: 10px;"><h1 style="font-size: 50px;">arkaoe</h1></div>
+    </header>
+    <main style="padding: 10px">
+      <p class="warning">
+        <strong>Warning!</strong> this tool has not reached version 1.0 yet. The UI lacks some polish and has not been tested much.
+      </p>
+      <section>
+        <h2>Clan members</h2>
+        <form action="/clan">
+          <div>
+            <label for="clan">Clan:</label>
+            <input id="clan" type="text" name="clan">
+          </div>
+          <input type="submit" value="Submit">
+        </form>
+      </section>
+      <section>
+        <h2>Team current matches</h2>
+        <form action="/matches">
+          <div>
+            <label for="Team members">Team members (comma-separated list):</label>
+            <input id="members" type="text" name="members">
+          </div>
+          <input type="submit" value="Submit">
+        </form>
+      </section>
+      <p class="version">
+        arkaoe v{{version}}
+      </p>
+    </main>
+    <footer>
+      <p style="width: 100%; text-align: center;">
+        Made by <a href="https://arkanosis.net/">Arkanosis</a>.
+        Code available <a href="https://github.com/Arkanosis/arkaoe">on GitHub</a> under the <a href="https://raw.githubusercontent.com/Arkanosis/arkaoe/master/LICENSE">the ISC license</a>.
+      </p>
+    </footer>
+  </body>
+</html>

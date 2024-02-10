@@ -1,0 +1,34 @@
+[package]
+name = "arkaoe"
+version = "0.1.0-dev"
+description = "Web server providing tools for the Age of Empires II real-time strategy video-game "
+
+authors = ["Jérémie Roquet <jroquet@arkanosis.net>"]
+
+documentation = "https://github.com/Arkanosis/arkaoe"
+homepage = "https://github.com/Arkanosis/arkaoe"
+repository = "https://github.com/Arkanosis/arkaoe"
+
+readme = "README.md"
+license = "ISC"
+
+keywords = ["aoe", "aoe2", "age", "empires", "tools"]
+categories = ["games"]
+
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+actix-files = "0.6"
+actix-web = "4.5"
+askama = "0.11"
+askama_actix = "0.13"
+docopt = "1.1"
+mime = "0.3"
+reqwest = { version = "0.11", features = ["blocking", "cookies", "gzip", "json"] }
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+
+[build-dependencies]
+vergen = "7.5"

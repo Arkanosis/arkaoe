@@ -2,6 +2,7 @@ use actix_files::NamedFile;
 
 use actix_web::{
     get,
+    error::ErrorInternalServerError,
     http::header::ContentType,
     web::{
         Data,
@@ -57,6 +58,12 @@ async fn serve_index(_data: Data<AppState>) -> impl Responder {
     }
 }
 
+fn make_client() -> Result<Client, Error> {
+  Client::builder()
+        .user_agent(format!("arkaoe/{}", crate::version()))
+        .cookie_store(true)
+        .build()
+}
 
 #[derive(Deserialize)]
 struct ClanRequest {
@@ -71,10 +78,7 @@ struct ClanMember {
 }
 
 async fn get_clan_members_ratings(clan_name: &str) -> Result<String, Error> {
-   let client = Client::builder()
-        .user_agent(format!("arkaoe/{}", crate::version()))
-        .cookie_store(true)
-        .build()?;
+     let client = make_client()?;
 
     let clan: Value = client.get(format!("https://aoe-api.reliclink.com/community/clan/getClanInfoFull?title=age2&name={}", &clan_name))
         .header(ACCEPT, mime::APPLICATION_JSON.essence_str())
@@ -167,17 +171,94 @@ struct MatchesRequest {
 
 #[allow(non_snake_case)]
 #[derive(Serialize)]
+struct PlayerInfo {
+    team: u64,
+    alias: String,
+    rating: u64,
+    wins: u64,
+    losses: u64,
+}
+
+#[allow(non_snake_case)]
+#[derive(Serialize)]
 struct MatchesResponse {
-    placeholder: String,
+    players: Vec<PlayerInfo>,
+}
+
+async fn get_current_matches(members_ids: &Vec<String>) -> Result<Json<MatchesResponse>, Error> {
+    let client = make_client()?;
+
+    let recent_matches: Value = client.get(format!("https://aoe-api.reliclink.com/community/leaderboard/getRecentMatchHistory?title=age2&profile_ids=[{}]", members_ids.join(",")))
+        .header(ACCEPT, mime::APPLICATION_JSON.essence_str())
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    if let Some(matches_stats) = recent_matches["matchHistoryStats"].as_array() {
+        let mut matches_stats: Vec<&Value> = matches_stats.iter().collect();
+        matches_stats.sort_by(|first, second| {
+            first["startgametime"].as_u64().unwrap_or(0).cmp(&second["startgametime"].as_u64().unwrap_or(0))
+        });
+
+        let mut players_list = Vec::new();
+        if let Some(last_match) = matches_stats.last() {
+            if let Some(players) = last_match["matchhistorymember"].as_array() {
+                if let Some(profiles) = recent_matches["profiles"].as_array() {
+                    for player in players {
+                        for profile in profiles.iter().filter(|profile| {
+                            profile["profile_id"].as_u64().unwrap_or(0) == player["profile_id"].as_u64().unwrap_or(0)
+                        }) {
+                            players_list.push(PlayerInfo {
+                                team: player["teamid"].as_u64().unwrap_or(0),
+                                alias: profile["alias"].as_str().unwrap_or("?").to_string(),
+                                // TODO FIXME: this is the team rating; use the 1v1 rating instead
+                                rating: player["oldrating"].as_u64().unwrap_or(0),
+                                wins: player["wins"].as_u64().unwrap_or(0),
+                                losses: player["losses"].as_u64().unwrap_or(0),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        players_list.sort_by(|first, second| {
+            first.team.cmp(&second.team)
+                .then(second.rating.cmp(&first.rating))
+        });
+
+        return Ok(Json(MatchesResponse {
+            players: players_list,
+        }));
+    }
+
+    Ok(Json(MatchesResponse {
+        players: Vec::new(),
+    }))
 }
 
 #[get("/matches")]
 async fn serve_matches(matches_request: Query<MatchesRequest>, _data: Data<AppState>) -> WebResult<Json<MatchesResponse>> {
-    let members: Vec<String> = matches_request.members.split(',').map(|user| user.to_string()).collect();
+    let members_ids: Vec<String> = matches_request.members
+        .split(',')
+        .map(|user| {
+            format!(r#""{}""#, user)
+        })
+        .collect();
 
-    Ok(Json(MatchesResponse {
-        placeholder: members.join("|"),
-    }))
+    let current_matches = get_current_matches(&members_ids)
+        .await;
+
+    match current_matches {
+        Ok(current_matches) => {
+           Ok(current_matches)
+        }
+        Err(err) => {
+            eprintln!("{}", err);
+            Err(ErrorInternalServerError("Internal server error (it's my fault, not yours!)"))
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -206,11 +287,6 @@ async fn serve_logo(_data: Data<AppState>) -> WebResult<NamedFile> {
 #[get("/favicon.ico")]
 async fn serve_favicon(_data: Data<AppState>) -> WebResult<NamedFile> {
     Ok(NamedFile::open("static/favicon.ico")?)
-}
-
-#[derive(Deserialize)]
-struct QueryRequest {
-
 }
 
 #[get("/version")]

@@ -1,6 +1,6 @@
 [package]
 name = "arkaoe"
-version = "0.1.0"
+version = "0.2.0-dev"
 description = "Web server providing tools for the Age of Empires II real-time strategy video-game "
 
 authors = ["Jérémie Roquet <jroquet@arkanosis.net>"]

@@ -174,7 +174,8 @@ struct MatchesRequest {
 struct PlayerInfo {
     team: u64,
     alias: String,
-    rating: u64,
+    current_rating: u64,
+    highest_rating: u64,
     wins: u64,
     losses: u64,
 }
@@ -204,19 +205,50 @@ async fn get_current_matches(members_ids: &Vec<String>) -> Result<Json<MatchesRe
         let mut players_list = Vec::new();
         if let Some(last_match) = matches_stats.last() {
             if let Some(players) = last_match["matchhistorymember"].as_array() {
+                let profiles_ids: Vec<String> = players.iter().map(|player| {
+                    player["profile_id"].as_u64().unwrap_or(0).to_string()
+                })
+                    .collect();
+                let stats: Value = client.get(format!("https://aoe-api.reliclink.com/community/leaderboard/GetPersonalStat?title=age2&profile_ids=[{}]", profiles_ids.join(",")))
+                    .header(ACCEPT, mime::APPLICATION_JSON.essence_str())
+                    .send()
+                    .await?
+                    .json()
+                    .await?;
                 if let Some(profiles) = recent_matches["profiles"].as_array() {
-                    for player in players {
-                        for profile in profiles.iter().filter(|profile| {
-                            profile["profile_id"].as_u64().unwrap_or(0) == player["profile_id"].as_u64().unwrap_or(0)
-                        }) {
-                            players_list.push(PlayerInfo {
-                                team: player["teamid"].as_u64().unwrap_or(0),
-                                alias: profile["alias"].as_str().unwrap_or("?").to_string(),
-                                // TODO FIXME: this is the team rating; use the 1v1 rating instead
-                                rating: player["oldrating"].as_u64().unwrap_or(0),
-                                wins: player["wins"].as_u64().unwrap_or(0),
-                                losses: player["losses"].as_u64().unwrap_or(0),
-                            });
+                    if let Some(members_stats_groups) = stats["statGroups"].as_array() {
+                        if let Some(leaderboards_stats) = stats["leaderboardStats"].as_array() {
+                            for player in players {
+                                for profile in profiles.iter().filter(|profile| {
+                                    profile["profile_id"].as_u64().unwrap_or(0) == player["profile_id"].as_u64().unwrap_or(0)
+                                }) {
+                                    for member_stats_group in members_stats_groups.iter().filter(|member_stats_group| {
+                                        let member = &member_stats_group["members"][0];
+                                        if let Some(profile_id) = member["profile_id"].as_u64() {
+                                            profile_id == player["profile_id"].as_u64().unwrap_or(0)
+                                        } else {
+                                            false
+                                        }
+                                    }) {
+                                        let member = &member_stats_group["members"][0];
+                                        if let Some(member_id) = member["personal_statgroup_id"].as_u64() {
+                                            for player_stats in leaderboards_stats.iter().filter(|leaderboard_stats| {
+                                                leaderboard_stats["leaderboard_id"] == 3 &&
+                                                leaderboard_stats["statgroup_id"].as_u64().unwrap_or(0) == member_id
+                                            }) {
+                                                players_list.push(PlayerInfo {
+                                                    team: player["teamid"].as_u64().unwrap_or(0),
+                                                    alias: profile["alias"].as_str().unwrap_or("?").to_string(),
+                                                    current_rating: player_stats["rating"].as_u64().unwrap_or(0),
+                                                    highest_rating: player_stats["highestrating"].as_u64().unwrap_or(0),
+                                                    wins: player["wins"].as_u64().unwrap_or(0),
+                                                    losses: player["losses"].as_u64().unwrap_or(0),
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -225,7 +257,7 @@ async fn get_current_matches(members_ids: &Vec<String>) -> Result<Json<MatchesRe
 
         players_list.sort_by(|first, second| {
             first.team.cmp(&second.team)
-                .then(second.rating.cmp(&first.rating))
+                .then(second.current_rating.cmp(&first.current_rating))
         });
 
         return Ok(Json(MatchesResponse {
